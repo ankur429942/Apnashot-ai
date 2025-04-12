@@ -1,0 +1,175 @@
+import os
+
+# Create full project folder structure
+project_name = "apna-shot-ai-full"
+base_path = f"/mnt/data/{project_name}"
+folders = [
+    "backend",
+    "frontend/public",
+    "frontend/src",
+    "uploads",
+    "templates"
+]
+
+# Files and content
+files = {
+    "backend/app.py": '''
+from flask import Flask, request, jsonify
+from face_swap import swap_face
+from video_export import export_video
+import os
+
+app = Flask(__name__)
+UPLOAD_FOLDER = '../uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    video_file = request.files['video']
+    face_file = request.files['face']
+
+    video_path = os.path.join(UPLOAD_FOLDER, 'input_video.mp4')
+    face_path = os.path.join(UPLOAD_FOLDER, 'face.jpg')
+
+    video_file.save(video_path)
+    face_file.save(face_path)
+
+    frames = swap_face(video_path, face_path)
+    output_path = os.path.join(UPLOAD_FOLDER, 'output.mp4')
+    export_video(frames, output_path)
+
+    return jsonify({'message': 'Video processed', 'output': output_path})
+
+if __name__ == '__main__':
+    app.run(debug=True)
+''',
+
+    "backend/face_swap.py": '''
+import insightface
+import cv2
+
+model = insightface.app.FaceAnalysis()
+model.prepare(ctx_id=0)
+
+def swap_face(video_path, face_img_path):
+    cap = cv2.VideoCapture(video_path)
+    output_frames = []
+
+    face_img = cv2.imread(face_img_path)
+    face_detected = model.get(cv2.cvtColor(face_img, cv2.COLOR_BGR2RGB))
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        faces = model.get(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        if faces:
+            x, y, w, h = faces[0].bbox.astype(int)
+            face_crop = cv2.resize(face_img, (w - x, h - y))
+            frame[y:h, x:w] = face_crop
+        output_frames.append(frame)
+
+    cap.release()
+    return output_frames
+''',
+
+    "backend/video_export.py": '''
+import moviepy.editor as mp
+
+def export_video(frames, out_path="output.mp4"):
+    clip = mp.ImageSequenceClip(frames, fps=24)
+    clip.write_videofile(out_path, codec='libx264')
+''',
+
+    "backend/requirements.txt": '''
+Flask
+insightface
+opencv-python
+moviepy
+''',
+
+    "frontend/src/Editor.jsx": '''
+import React, { useState } from "react";
+import { Stage, Layer, Text } from "react-konva";
+
+const Editor = () => {
+  const [texts, setTexts] = useState([{ text: "Edit me!", x: 50, y: 60 }]);
+
+  const handleDrag = (index, e) => {
+    const newTexts = [...texts];
+    newTexts[index] = { ...newTexts[index], x: e.target.x(), y: e.target.y() };
+    setTexts(newTexts);
+  };
+
+  return (
+    <Stage width={window.innerWidth} height={500}>
+      <Layer>
+        {texts.map((txt, i) => (
+          <Text
+            key={i}
+            text={txt.text}
+            x={txt.x}
+            y={txt.y}
+            draggable
+            fill="white"
+            fontSize={24}
+            onDragEnd={(e) => handleDrag(i, e)}
+          />
+        ))}
+      </Layer>
+    </Stage>
+  );
+};
+
+export default Editor;
+''',
+
+    "frontend/src/App.jsx": '''
+import React from "react";
+import Editor from "./Editor";
+
+function App() {
+  return (
+    <div>
+      <h1>Apna Shot AI 🎬</h1>
+      <Editor />
+    </div>
+  );
+}
+
+export default App;
+''',
+
+    "frontend/package.json": '''
+{
+  "name": "apna-shot-ai",
+  "version": "1.0.0",
+  "description": "Drag and drop video editor",
+  "scripts": {
+    "start": "vite"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-konva": "^18.0.3",
+    "konva": "^9.2.0"
+  },
+  "devDependencies": {
+    "vite": "^4.0.0"
+  }
+}
+'''
+}
+
+# Create folder structure
+os.makedirs(base_path, exist_ok=True)
+for folder in folders:
+    os.makedirs(os.path.join(base_path, folder), exist_ok=True)
+
+# Write files
+for path, content in files.items():
+    file_path = os.path.join(base_path, path)
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, 'w') as f:
+      
+
